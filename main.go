@@ -10,6 +10,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
 const (
@@ -46,11 +47,31 @@ func (p *viewport) Position() (int, int) {
 
 type Game struct {
 	viewport viewport
+	ticks    uint64
+	memStats *runtime.MemStats
 }
 
 func (g *Game) Update() error {
 	if !isWasm && ebiten.IsKeyPressed(ebiten.KeyEscape) {
 		return fmt.Errorf("esc pressed")
+	}
+
+	if inpututil.IsKeyJustPressed(ebiten.KeyG) {
+		runtime.GC()
+	}
+
+	if inpututil.IsKeyJustPressed(ebiten.KeyT) {
+		max := ebiten.MaxTPS()
+		if max == ebiten.UncappedTPS {
+			ebiten.SetMaxTPS(60)
+		} else {
+			ebiten.SetMaxTPS(ebiten.UncappedTPS)
+		}
+	}
+
+	g.ticks++
+	if g.ticks%30 == 0 {
+		runtime.ReadMemStats(g.memStats)
 	}
 
 	g.viewport.Move()
@@ -61,7 +82,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	x16, y16 := g.viewport.Position()
 	offsetX, offsetY := float64(-x16)/16, float64(-y16)/16
 
-	const repeat = 3
+	const repeat = 2
 	w, h := deepField.Size()
 	for j := 0; j < repeat; j++ {
 		for i := 0; i < repeat; i++ {
@@ -72,15 +93,41 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		}
 	}
 
-	msg := fmt.Sprintf(`TPS: %0.2f; FPS: %0.2f
+	ms := g.memStats
+	msg := fmt.Sprintf(`TPS: %0.2f (max: %d); FPS: %0.2f
 vp: %d, %d
-`, ebiten.CurrentTPS(), ebiten.CurrentFPS(),
-		g.viewport.x16, g.viewport.y16)
+ticks: %d
+Alloc: %s
+Total: %s
+Sys: %s
+NextGC: %s
+NumGC: %d
+
+<G>: run garbage collection
+<T>: toggle unlimited TPS`,
+		ebiten.CurrentTPS(), ebiten.MaxTPS(), ebiten.CurrentFPS(),
+		g.viewport.x16, g.viewport.y16,
+		g.ticks,
+		formatBytes(ms.Alloc), formatBytes(ms.TotalAlloc), formatBytes(ms.Sys),
+		formatBytes(ms.NextGC), ms.NumGC,
+	)
 	ebitenutil.DebugPrint(screen, msg)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return width, height
+}
+
+func formatBytes(b uint64) string {
+	if b >= 1073741824 {
+		return fmt.Sprintf("%0.2f GiB", float64(b)/1073741824)
+	} else if b >= 1048576 {
+		return fmt.Sprintf("%0.2f MiB", float64(b)/1048576)
+	} else if b >= 1024 {
+		return fmt.Sprintf("%0.2f KiB", float64(b)/1024)
+	} else {
+		return fmt.Sprintf("%d B", b)
+	}
 }
 
 func main() {
@@ -92,7 +139,11 @@ func main() {
 	deepField = ebiten.NewImageFromImage(img)
 	ebiten.SetWindowSize(width, height)
 	ebiten.SetWindowTitle("Deepfield scroll")
-	if err := ebiten.RunGame(&Game{}); err != nil {
+
+	memStats := &runtime.MemStats{}
+	runtime.ReadMemStats(memStats)
+
+	if err := ebiten.RunGame(&Game{memStats: memStats}); err != nil {
 		log.Fatal(err)
 	}
 }
