@@ -4,22 +4,27 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"image/color"
 	_ "image/png"
 	"log"
 	"runtime"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hajimehoshi/ebiten/v2/text"
+	"github.com/vzx/ebiten-memory-usage/assets"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/opentype"
 )
 
 const (
-	width  = 1280
-	height = 720
+	layoutWidth, layoutHeight = 3840, 2160
+	windowWidth, windowHeight = 1920, 1080
 )
 
 var (
 	deepField *ebiten.Image
+	mplusBold font.Face
 	isWasm    = runtime.GOARCH == "wasm"
 )
 
@@ -82,7 +87,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	x16, y16 := g.viewport.Position()
 	offsetX, offsetY := float64(-x16)/16, float64(-y16)/16
 
-	const repeat = 2
+	const repeat = 3
 	w, h := deepField.Size()
 	for j := 0; j < repeat; j++ {
 		for i := 0; i < repeat; i++ {
@@ -111,11 +116,12 @@ NumGC: %d
 		formatBytes(ms.Alloc), formatBytes(ms.TotalAlloc), formatBytes(ms.Sys),
 		formatBytes(ms.NextGC), ms.NumGC,
 	)
-	ebitenutil.DebugPrint(screen, msg)
+	text.Draw(screen, msg, mplusBold, 11, 55, color.Black)
+	text.Draw(screen, msg, mplusBold, 10, 54, color.White)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
-	return width, height
+	return layoutWidth, layoutHeight
 }
 
 func formatBytes(b uint64) string {
@@ -131,13 +137,28 @@ func formatBytes(b uint64) string {
 }
 
 func main() {
-	img, _, err := image.Decode(bytes.NewReader(Deepfield_png))
+	img, _, err := image.Decode(bytes.NewReader(assets.Deepfield_png))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	tt, err := opentype.Parse(assets.Mplus_1p_bold_ttf)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	const dpi = 72
+	mplusBold, err = opentype.NewFace(tt, &opentype.FaceOptions{
+		Size:    48,
+		DPI:     dpi,
+		Hinting: font.HintingFull,
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	deepField = ebiten.NewImageFromImage(img)
-	ebiten.SetWindowSize(width, height)
+	ebiten.SetWindowSize(windowWidth, windowHeight)
 	ebiten.SetWindowTitle("Deepfield scroll")
 
 	memStats := &runtime.MemStats{}

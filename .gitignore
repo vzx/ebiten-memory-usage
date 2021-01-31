@@ -1,2 +1,4 @@
-/deepfield.go
-/deepfield.png
+assets/deepfield.go
+assets/mplus.go
+/wasm_exec.js
+*.wasm
