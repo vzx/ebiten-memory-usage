@@ -8,6 +8,7 @@ import (
 	_ "image/png"
 	"log"
 	"runtime"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -51,9 +52,11 @@ func (p *viewport) Position() (int, int) {
 }
 
 type Game struct {
-	viewport viewport
-	ticks    uint64
-	memStats *runtime.MemStats
+	start        time.Time
+	totalRunTime time.Duration
+	viewport     viewport
+	ticks        uint64
+	memStats     *runtime.MemStats
 }
 
 func (g *Game) Update() error {
@@ -77,6 +80,7 @@ func (g *Game) Update() error {
 	g.ticks++
 	if g.ticks%30 == 0 {
 		runtime.ReadMemStats(g.memStats)
+		g.totalRunTime = time.Now().Sub(g.start)
 	}
 
 	g.viewport.Move()
@@ -99,8 +103,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 
 	ms := g.memStats
-	msg := fmt.Sprintf(`TPS: %0.2f (max: %d); FPS: %0.2f
-vp: %d, %d
+	msg := fmt.Sprintf(`vp: %d, %d
+TPS: %0.2f (max: %d); FPS: %0.2f
+Run time: %v
 ticks: %d
 Alloc: %s
 Total: %s
@@ -110,8 +115,9 @@ NumGC: %d
 
 <G>: run garbage collection
 <T>: toggle unlimited TPS`,
-		ebiten.CurrentTPS(), ebiten.MaxTPS(), ebiten.CurrentFPS(),
 		g.viewport.x16, g.viewport.y16,
+		ebiten.CurrentTPS(), ebiten.MaxTPS(), ebiten.CurrentFPS(),
+		g.totalRunTime,
 		g.ticks,
 		formatBytes(ms.Alloc), formatBytes(ms.TotalAlloc), formatBytes(ms.Sys),
 		formatBytes(ms.NextGC), ms.NumGC,
@@ -164,7 +170,7 @@ func main() {
 	memStats := &runtime.MemStats{}
 	runtime.ReadMemStats(memStats)
 
-	if err := ebiten.RunGame(&Game{memStats: memStats}); err != nil {
+	if err := ebiten.RunGame(&Game{memStats: memStats, start: time.Now()}); err != nil {
 		log.Fatal(err)
 	}
 }
