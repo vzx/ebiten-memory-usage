@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+
+<head>
+    <title>Ebiten Memory Usage</title>
+    <script src="wasm_exec.js"></script>
+    <script>
+        async function downloadAndRun() {
+            // Credit: https://javascript.info/fetch-progress
+            const loading = document.getElementById("loading");
+
+            // Start download
+            const response = await fetch('ebiten-memory-usage.wasm');
+            const reader = response.body.getReader();
+            const contentLength = +response.headers.get('Content-Length');
+            const showProgress = received => {
+                const perc = received / (contentLength / 100.0);
+                const roundedPerc = Math.round(perc * 100.0) / 100.0;
+                loading.innerText = 'Downloading...\n' + received.toLocaleString() + '/' + contentLength.toLocaleString() + ' bytes\n' + (roundedPerc) + '%';
+            }
+            showProgress(0);
+
+            // Fetch chunks and update progress
+            let receivedLength = 0;
+            const chunks = [];
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                    break;
+                }
+                chunks.push(value);
+                receivedLength += value.length;
+                showProgress(receivedLength);
+            }
+
+            // Build a Uint8Array out of all chunks
+            const chunksAll = new Uint8Array(receivedLength);
+            let position = 0;
+            for (const chunk of chunks) {
+                chunksAll.set(chunk, position);
+                position += chunk.length;
+            }
+
+            loading.innerText = "Download complete, starting game...";
+
+            // Instantiate WebAssembly
+            const go = new Go();
+            const wasm = await WebAssembly.instantiate(chunksAll, go.importObject)
+
+            // Run the actual game
+            document.getElementById("loading").remove()
+            go.run(wasm.instance);
+        }
+
+        document.addEventListener('DOMContentLoaded', downloadAndRun, false);
+
+    </script>
+</head>
+
+<body style="font: 12pt sans-serif; text-align: center; background: #000000; color: #ffffff; padding-top: 50px;">
+    <div id="loading">Downloading...</div>
+</body>
